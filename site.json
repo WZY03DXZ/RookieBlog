@@ -1,0 +1,9 @@
+{
+  "title": "RookieBlog",
+  "description": "一个依赖少、可直接用 Markdown 写作的静态博客框架。",
+  "tagline": "用 Markdown 写文章，把图片放进仓库，生成静态页面后直接托管到 GitHub Pages。",
+  "author": "Rookie",
+  "language": "zh-CN",
+  "site_url": "",
+  "footer": "Powered by RookieBlog and plain Python."
+}
