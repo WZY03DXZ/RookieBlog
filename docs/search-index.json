@@ -1,0 +1,36 @@
+[
+  {
+    "title": "用 Markdown 和本地图片开始写博客",
+    "url": "posts/hello-rookieblog/",
+    "summary": "RookieBlog 的目标是尽量轻量、开箱可用，并且让文章和图片都能直接跟着仓库走。",
+    "content": "用 Markdown 和本地图片开始写博客 如果你想要一个依赖少、容易安装、适合托管到 GitHub 的博客框架，最重要的是把写作流程压缩到足够简单： 文章就是 Markdown 图片直接放仓库 构建后输出纯静态页面 本地图片不需要图床 下面这张图就是直接放在仓库里的本地 SVG： 本地示例图 这样有几个好处： 文章和图片一起版本管理。 仓库迁移时内容不会丢。 不依赖第三方图片服务的可用性。 构建命令 构建完成后，生成的静态文件会出现在 dist/ 目录里。",
+    "tags": [
+      "Markdown",
+      "GitHub Pages",
+      "Static Site"
+    ],
+    "kind": "post",
+    "date": "2026-04-21"
+  },
+  {
+    "title": "README 导入示例",
+    "url": "posts/readme-import-demo/",
+    "summary": "RookieBlog 一个尽量轻量的静态博客框架： 只依赖 Python 标准库，不需要安装第三方包 文章直接写在 Markdown 里 支持从 txt、md、html、docx 导入文章，pdf 可通过本机 pdftotext 导入 自带前端全文搜索 主题从 themes/ 目录扩展 可选接入 Giscus / Utterances 评论 图片、SVG、…",
+    "content": "RookieBlog 一个尽量轻量的静态博客框架： 只依赖 Python 标准库，不需要安装第三方包 文章直接写在 Markdown 里 支持从 txt、md、html、docx 导入文章，pdf 可通过本机 pdftotext 导入 自带前端全文搜索 主题从 themes/ 目录扩展 可选接入 Giscus / Utterances 评论 图片、SVG、附件可以直接放仓库，不需要第三方图床 生成静态网页，适合部署到 GitHub Pages 目录结构 快速开始 生成结果会输出到 dist/。 如果你想本地预览： 新建文章 它会在 content/posts/ 下生成一篇带 front matter 的 Markdown 文件。 导入常见文档 支持： txt md html / htm docx pdf 说明： pdf 导入依赖本机安装 pdftotext 老式 .doc 建议先另存为 .docx docx 中的图片会自动导出到 content/assets/imports/ / 也可以导入成独立页面： Markdown 元数据 每篇文章顶部都可以写简单的 front matter： 使用本地图片 把图片放进仓库里，然后像普通 Markdown 一样引用即可。 例如： 构建时会把 content/ 里的非 Markdown 文件一起复制到 dist/，所以： content/assets/ 里的图片会被一起带到输出目录 放在文章旁边的本地图片也能一起带过去 不需要使用第三方图片托管服务 GitHub Pages 部署 仓库里已经附带了 .github/workflows/pages.yml，推送到 GitHub 后可以直接用 Actions 部署。 推荐步骤： 把这个项目推到 GitHub。 在仓库的 Settings -> Pages 中启用 GitHub Actions 作为部署来源。 推送到 main 分支后，GitHub 会自动构建并发布 dist/。 文章与页面 文章放在 content/posts/*.md 独立页面放在 content/pages/*.md 首页会自动按日期倒序展示文章 会自动生成 dist/search/index.html 和 dist/search-index.json 主题扩展 主题目录在 themes/。 默认主题包含： 创建新主题的方式： 复制 themes/default 为 themes/你的主题名 修改模板和样式 在 site.json 里设置 \"theme\": \"你的主题名\" 评论系统 当前支持： giscus utterances 在 site.json 的 comments 中配置即可。 例如启用 Giscus 时，需要填写： 如果暂时不想启用评论，保留 \"provider\": \"\" 即可。 适合这个框架的场景 想要一个比重量级 SSG 更简单的个人博客 更看重“容易安装和使用”，而不是海量插件生态",
+    "tags": [
+      "导入",
+      "Markdown"
+    ],
+    "kind": "post",
+    "date": "2026-04-21"
+  },
+  {
+    "title": "关于",
+    "url": "about/",
+    "summary": "这是一个零依赖的 Markdown 静态博客框架示例页面。",
+    "content": "关于 RookieBlog RookieBlog 是一个偏向简单、直接、可维护的博客框架原型。 它适合： 想直接写 Markdown 的个人博客 想把图片和文章都留在 Git 仓库里 想部署到 GitHub Pages 的静态站点 如果你后面愿意继续扩展，它也很适合作为自己的博客内核继续演化。",
+    "tags": [],
+    "kind": "page",
+    "date": ""
+  }
+]

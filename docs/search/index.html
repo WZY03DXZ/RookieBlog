@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>搜索 | RookieBlog</title>
+  <meta name="description" content="搜索 RookieBlog 的全部文章与页面内容。" />
+  <script>(function(){var theme='light';try{var saved=window.localStorage.getItem('rookieblog-theme');if(saved==='light'||saved==='dark'){theme=saved;}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){theme='dark';}}catch(error){if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){theme='dark';}}document.documentElement.dataset.theme=theme;})();</script>
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../_theme/theme.css" />
+  
+</head>
+<body class="search-page">
+  <header class="site-header">
+    <div class="shell site-header__inner">
+      <a class="brand" href="../index.html">RookieBlog</a>
+      <form class="header-search" action="index.html" method="get"><label class="header-search__label" for="global-search-input">全站搜索</label><input id="global-search-input" class="header-search__input" type="search" name="q" placeholder="搜索文章..." /><button class="header-search__submit" type="submit">搜索</button></form>
+      <nav class="nav-links">
+        <a href="../index.html">首页</a>
+<a href="../articles/index.html" class="is-active" aria-current="page">文章</a>
+<a href="../about/index.html">关于</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="切换暗色模式" title="切换暗色模式">
+          <span class="theme-toggle__track" aria-hidden="true">
+            <span class="theme-toggle__thumb"></span>
+          </span>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main class="shell page-shell">
+    <section class="search-stage" data-search-root data-search-index="../search-index.json">
+  <section class="search-stream">
+    <div class="search-stream__head">
+      <div>
+        <div class="eyebrow">搜索结果</div>
+        <h2 data-search-heading>全部内容</h2>
+      </div>
+      <p class="search-status" data-search-status>正在准备搜索索引…</p>
+    </div>
+    <div class="search-results" data-search-results></div>
+  </section>
+</section>
+
+  </main>
+  <footer class="site-footer">
+    <div class="shell site-footer__inner">
+      <p>Powered by RookieBlog and plain Python.</p>
+    </div>
+  </footer>
+  <script src="../_theme/theme-toggle.js" defer></script>
+  <script src="../_theme/search.js" defer></script>
+</body>
+</html>

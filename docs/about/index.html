@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>关于 | RookieBlog</title>
+  <meta name="description" content="这是一个零依赖的 Markdown 静态博客框架示例页面。" />
+  <script>(function(){var theme='light';try{var saved=window.localStorage.getItem('rookieblog-theme');if(saved==='light'||saved==='dark'){theme=saved;}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){theme='dark';}}catch(error){if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){theme='dark';}}document.documentElement.dataset.theme=theme;})();</script>
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../_theme/theme.css" />
+  
+</head>
+<body class="page-page">
+  <header class="site-header">
+    <div class="shell site-header__inner">
+      <a class="brand" href="../index.html">RookieBlog</a>
+      <form class="header-search" action="../search/index.html" method="get"><label class="header-search__label" for="global-search-input">全站搜索</label><input id="global-search-input" class="header-search__input" type="search" name="q" placeholder="搜索文章..." /><button class="header-search__submit" type="submit">搜索</button></form>
+      <nav class="nav-links">
+        <a href="../index.html">首页</a>
+<a href="../articles/index.html">文章</a>
+<a href="index.html" class="is-active" aria-current="page">关于</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="切换暗色模式" title="切换暗色模式">
+          <span class="theme-toggle__track" aria-hidden="true">
+            <span class="theme-toggle__thumb"></span>
+          </span>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main class="shell page-shell">
+    <article class="article-card">
+  <div class="eyebrow">独立页面</div>
+  <h1>关于</h1>
+  <p class="article-lead">这是一个零依赖的 Markdown 静态博客框架示例页面。</p>
+  <div class="markdown-content">
+    <h1>关于 RookieBlog</h1>
+<p>RookieBlog 是一个偏向简单、直接、可维护的博客框架原型。</p>
+<p>它适合：</p>
+<ul>
+<li>想直接写 Markdown 的个人博客</li><li>想把图片和文章都留在 Git 仓库里</li><li>想部署到 GitHub Pages 的静态站点</li>
+</ul>
+<p>如果你后面愿意继续扩展，它也很适合作为自己的博客内核继续演化。</p>
+  </div>
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="shell site-footer__inner">
+      <p>Powered by RookieBlog and plain Python.</p>
+    </div>
+  </footer>
+  <script src="../_theme/theme-toggle.js" defer></script>
+  
+</body>
+</html>

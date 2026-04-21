@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>README 导入示例 | RookieBlog</title>
+  <meta name="description" content="RookieBlog 一个尽量轻量的静态博客框架： 只依赖 Python 标准库，不需要安装第三方包 文章直接写在 Markdown 里 支持从 txt、md、html、docx 导入文章，pdf 可通过本机 pdftotext 导入 自带前端全文搜索 主题从 themes/ 目录扩展 可选接入 Giscus / Utterances 评论 图片、SVG、…" />
+  <script>(function(){var theme='light';try{var saved=window.localStorage.getItem('rookieblog-theme');if(saved==='light'||saved==='dark'){theme=saved;}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){theme='dark';}}catch(error){if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){theme='dark';}}document.documentElement.dataset.theme=theme;})();</script>
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../../_theme/theme.css" />
+  
+</head>
+<body class="post-page">
+  <header class="site-header">
+    <div class="shell site-header__inner">
+      <a class="brand" href="../../index.html">RookieBlog</a>
+      <form class="header-search" action="../../search/index.html" method="get"><label class="header-search__label" for="global-search-input">全站搜索</label><input id="global-search-input" class="header-search__input" type="search" name="q" placeholder="搜索文章..." /><button class="header-search__submit" type="submit">搜索</button></form>
+      <nav class="nav-links">
+        <a href="../../index.html">首页</a>
+<a href="../../articles/index.html" class="is-active" aria-current="page">文章</a>
+<a href="../../about/index.html">关于</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="切换暗色模式" title="切换暗色模式">
+          <span class="theme-toggle__track" aria-hidden="true">
+            <span class="theme-toggle__thumb"></span>
+          </span>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main class="shell page-shell">
+    <div class="post-layout">
+  <div class="post-main">
+    <article class="article-card">
+      <div class="eyebrow">博客文章</div>
+      <h1>README 导入示例</h1>
+      <p class="article-lead">RookieBlog 一个尽量轻量的静态博客框架： 只依赖 Python 标准库，不需要安装第三方包 文章直接写在 Markdown 里 支持从 txt、md、html、docx 导入文章，pdf 可通过本机 pdftotext 导入 自带前端全文搜索 主题从 themes/ 目录扩展 可选接入 Giscus / Utterances 评论 图片、SVG、…</p>
+      <div class="meta-row">
+        <span>2026-04-21</span>
+        <span>Rookie</span>
+      </div>
+      
+      <div class="markdown-content">
+        <h1 id="rookieblog">RookieBlog</h1>
+<p>一个尽量轻量的静态博客框架：</p>
+<ul>
+<li>只依赖 Python 标准库，不需要安装第三方包</li><li>文章直接写在 Markdown 里</li><li>支持从 <code>txt</code>、<code>md</code>、<code>html</code>、<code>docx</code> 导入文章，<code>pdf</code> 可通过本机 <code>pdftotext</code> 导入</li><li>自带前端全文搜索</li><li>主题从 <code>themes/</code> 目录扩展</li><li>可选接入 Giscus / Utterances 评论</li><li>图片、SVG、附件可以直接放仓库，不需要第三方图床</li><li>生成静态网页，适合部署到 GitHub Pages</li>
+</ul>
+<h2 id="目录结构">目录结构</h2>
+<pre><code class="language-text">RookieBlog/
+├── content/
+│   ├── assets/         # 图片、SVG、附件
+│   ├── pages/          # 独立页面
+│   └── posts/          # 博客文章
+├── static/             # 公共静态资源，如 favicon、额外素材
+├── themes/             # 主题模板和样式
+├── .github/workflows/  # GitHub Pages 自动部署
+├── rookieblog.py       # 生成器脚本
+└── site.json           # 站点配置</code></pre>
+<h2 id="快速开始">快速开始</h2>
+<pre><code class="language-bash">python3 rookieblog.py build</code></pre>
+<p>生成结果会输出到 <code>dist/</code>。</p>
+<p>如果你想本地预览：</p>
+<pre><code class="language-bash">python3 rookieblog.py serve --port 8000</code></pre>
+<h2 id="新建文章">新建文章</h2>
+<pre><code class="language-bash">python3 rookieblog.py new &quot;我的第一篇文章&quot;</code></pre>
+<p>它会在 <code>content/posts/</code> 下生成一篇带 front matter 的 Markdown 文件。</p>
+<h2 id="导入常见文档">导入常见文档</h2>
+<pre><code class="language-bash">python3 rookieblog.py import ./notes.docx --tags 导入,文档</code></pre>
+<p>支持：</p>
+<ul>
+<li><code>txt</code></li><li><code>md</code></li><li><code>html</code> / <code>htm</code></li><li><code>docx</code></li><li><code>pdf</code></li>
+</ul>
+<p>说明：</p>
+<ul>
+<li><code>pdf</code> 导入依赖本机安装 <code>pdftotext</code></li><li>老式 <code>.doc</code> 建议先另存为 <code>.docx</code></li><li><code>docx</code> 中的图片会自动导出到 <code>content/assets/imports/&lt;slug&gt;/</code></li>
+</ul>
+<p>也可以导入成独立页面：</p>
+<pre><code class="language-bash">python3 rookieblog.py import ./about.txt --page --title &quot;关于本站&quot;</code></pre>
+<h2 id="markdown-元数据">Markdown 元数据</h2>
+<p>每篇文章顶部都可以写简单的 front matter：</p>
+<pre><code class="language-md">---
+title: 我的第一篇文章
+date: 2026-04-21
+summary: 这是文章摘要。
+tags: [Markdown, GitHub Pages, Python]
+cover: /assets/images/local-demo.svg
+draft: false
+---</code></pre>
+<h2 id="使用本地图片">使用本地图片</h2>
+<p>把图片放进仓库里，然后像普通 Markdown 一样引用即可。</p>
+<p>例如：</p>
+<pre><code class="language-md">![封面图](/assets/images/local-demo.svg)</code></pre>
+<p>构建时会把 <code>content/</code> 里的非 Markdown 文件一起复制到 <code>dist/</code>，所以：</p>
+<ul>
+<li><code>content/assets/</code> 里的图片会被一起带到输出目录</li><li>放在文章旁边的本地图片也能一起带过去</li><li>不需要使用第三方图片托管服务</li>
+</ul>
+<h2 id="github-pages-部署">GitHub Pages 部署</h2>
+<p>仓库里已经附带了 <code>.github/workflows/pages.yml</code>，推送到 GitHub 后可以直接用 Actions 部署。</p>
+<p>推荐步骤：</p>
+<ol>
+<li>把这个项目推到 GitHub。</li><li>在仓库的 <code>Settings -&gt; Pages</code> 中启用 <code>GitHub Actions</code> 作为部署来源。</li><li>推送到 <code>main</code> 分支后，GitHub 会自动构建并发布 <code>dist/</code>。</li>
+</ol>
+<h2 id="文章与页面">文章与页面</h2>
+<ul>
+<li>文章放在 <code>content/posts/*.md</code></li><li>独立页面放在 <code>content/pages/*.md</code></li><li>首页会自动按日期倒序展示文章</li><li>会自动生成 <code>dist/search/index.html</code> 和 <code>dist/search-index.json</code></li>
+</ul>
+<h2 id="主题扩展">主题扩展</h2>
+<p>主题目录在 <code>themes/</code>。</p>
+<p>默认主题包含：</p>
+<pre><code class="language-text">themes/default/
+├── assets/
+│   ├── theme.css
+│   └── search.js
+└── templates/
+    ├── base.html
+    ├── home.html
+    ├── page.html
+    ├── post.html
+    ├── post_card.html
+    └── search.html</code></pre>
+<p>创建新主题的方式：</p>
+<ol>
+<li>复制 <code>themes/default</code> 为 <code>themes/你的主题名</code></li><li>修改模板和样式</li><li>在 <code>site.json</code> 里设置 <code>&quot;theme&quot;: &quot;你的主题名&quot;</code></li>
+</ol>
+<h2 id="评论系统">评论系统</h2>
+<p>当前支持：</p>
+<ul>
+<li><code>giscus</code></li><li><code>utterances</code></li>
+</ul>
+<p>在 <code>site.json</code> 的 <code>comments</code> 中配置即可。</p>
+<p>例如启用 Giscus 时，需要填写：</p>
+<pre><code class="language-json">&quot;comments&quot;: {
+  &quot;provider&quot;: &quot;giscus&quot;,
+  &quot;repo&quot;: &quot;WZY03DXZ/RookieBlog&quot;,
+  &quot;repo_id&quot;: &quot;你的 repo_id&quot;,
+  &quot;category&quot;: &quot;Announcements&quot;,
+  &quot;category_id&quot;: &quot;你的 category_id&quot;,
+  &quot;mapping&quot;: &quot;pathname&quot;,
+  &quot;theme&quot;: &quot;preferred_color_scheme&quot;,
+  &quot;lang&quot;: &quot;zh-CN&quot;
+}</code></pre>
+<p>如果暂时不想启用评论，保留 <code>&quot;provider&quot;: &quot;&quot;</code> 即可。</p>
+<h2 id="适合这个框架的场景">适合这个框架的场景</h2>
+<ul>
+<li>想要一个比重量级 SSG 更简单的个人博客</li><li>更看重“容易安装和使用”，而不是海量插件生态</li>
+</ul>
+      </div>
+      <ul class="tag-list"><li class="tag-chip">导入</li><li class="tag-chip">Markdown</li></ul>
+    </article>
+    
+  </div>
+  <aside class="post-sidebar">
+    <section class="sidebar-card"><div class="eyebrow">文章大纲</div><h2>目录</h2><ul class="toc-list"><li class="toc-item toc-item--level-0"><a href="#目录结构">目录结构</a></li><li class="toc-item toc-item--level-0"><a href="#快速开始">快速开始</a></li><li class="toc-item toc-item--level-0"><a href="#新建文章">新建文章</a></li><li class="toc-item toc-item--level-0"><a href="#导入常见文档">导入常见文档</a></li><li class="toc-item toc-item--level-0"><a href="#markdown-元数据">Markdown 元数据</a></li><li class="toc-item toc-item--level-0"><a href="#使用本地图片">使用本地图片</a></li><li class="toc-item toc-item--level-0"><a href="#github-pages-部署">GitHub Pages 部署</a></li><li class="toc-item toc-item--level-0"><a href="#文章与页面">文章与页面</a></li><li class="toc-item toc-item--level-0"><a href="#主题扩展">主题扩展</a></li><li class="toc-item toc-item--level-0"><a href="#评论系统">评论系统</a></li><li class="toc-item toc-item--level-0"><a href="#适合这个框架的场景">适合这个框架的场景</a></li></ul></section>
+    <section class="sidebar-card"><div class="eyebrow">同分类文章</div><div class="sidebar-card__head"><h2>others</h2><a class="sidebar-card__action" href="../../categories/others/index.html">查看分类</a></div><ul class="related-list"><li class="related-item"><a class="related-item__title" href="../hello-rookieblog/index.html">用 Markdown 和本地图片开始写博客</a><p class="related-item__summary">RookieBlog 的目标是尽量轻量、开箱可用，并且让文章和图片都能直接跟着仓库走。</p><div class="related-item__meta"><span>2026-04-21</span><span class="related-item__tag">others</span></div></li></ul></section>
+  </aside>
+</div>
+
+  </main>
+  <footer class="site-footer">
+    <div class="shell site-footer__inner">
+      <p>Powered by RookieBlog and plain Python.</p>
+    </div>
+  </footer>
+  <script src="../../_theme/theme-toggle.js" defer></script>
+  
+</body>
+</html>
