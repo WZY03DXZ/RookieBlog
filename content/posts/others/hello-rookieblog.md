@@ -3,7 +3,7 @@ title: 用 Markdown 和本地图片开始写博客
 date: 2026-04-21
 summary: RookieBlog 的目标是尽量轻量、开箱可用，并且让文章和图片都能直接跟着仓库走。
 tags: [Markdown, GitHub Pages, Static Site]
-cover: ../assets/images/local-demo.svg
+cover: /assets/images/local-demo.svg
 ---
 
 # 用 Markdown 和本地图片开始写博客
@@ -18,7 +18,7 @@ cover: ../assets/images/local-demo.svg
 
 下面这张图就是直接放在仓库里的本地 SVG：
 
-![本地示例图](../assets/images/local-demo.svg)
+![本地示例图](/assets/images/local-demo.svg)
 
 这样有几个好处：
 

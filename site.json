@@ -5,5 +5,19 @@
   "author": "Rookie",
   "language": "zh-CN",
   "site_url": "",
-  "footer": "Powered by RookieBlog and plain Python."
+  "footer": "Powered by RookieBlog and plain Python.",
+  "theme": "default",
+  "search_enabled": true,
+  "comments": {
+    "provider": "",
+    "repo": "",
+    "repo_id": "",
+    "category": "",
+    "category_id": "",
+    "mapping": "pathname",
+    "theme": "preferred_color_scheme",
+    "lang": "zh-CN",
+    "issue_term": "pathname",
+    "label": "comment"
+  }
 }

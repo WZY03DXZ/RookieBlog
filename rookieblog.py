@@ -7,9 +7,13 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import unicodedata
+import xml.etree.ElementTree as ET
+import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
+from html.parser import HTMLParser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
@@ -20,9 +24,12 @@ CONTENT_DIR = ROOT / "content"
 POSTS_DIR = CONTENT_DIR / "posts"
 PAGES_DIR = CONTENT_DIR / "pages"
 STATIC_DIR = ROOT / "static"
+THEMES_DIR = ROOT / "themes"
 DIST_DIR = ROOT / "dist"
+THEME_DIST_DIR = DIST_DIR / "_theme"
 CONFIG_PATH = ROOT / "site.json"
 
+DEFAULT_THEME = "default"
 EXTERNAL_PREFIXES = ("http://", "https://", "mailto:", "tel:", "data:", "#")
 CODE_RE = re.compile(r"`([^`]+)`")
 IMAGE_RE = re.compile(r"!\[(.*?)\]\((\S+?)(?:\s+\"(.*?)\")?\)")
@@ -30,6 +37,8 @@ LINK_RE = re.compile(r"\[(.*?)\]\((\S+?)(?:\s+\"(.*?)\")?\)")
 STRONG_RE = re.compile(r"(\*\*|__)(?=\S)(.+?)(?<=\S)\1")
 EMPHASIS_RE = re.compile(r"(?<!\*)\*(?=\S)(.+?)(?<=\S)\*(?!\*)|(?<!_)_(?=\S)(.+?)(?<=\S)_(?!_)")
 INLINE_PLACEHOLDER_RE = re.compile(r"@@INLINE(\d+)@@")
+TEMPLATE_TOKEN_RE = re.compile(r"{{\s*([a-zA-Z0-9_]+)\s*}}")
+WORD_NAMESPACE = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 
 
 @dataclass
@@ -41,6 +50,9 @@ class SiteConfig:
     language: str = "zh-CN"
     site_url: str = ""
     footer: str = "Built with RookieBlog."
+    theme: str = DEFAULT_THEME
+    search_enabled: bool = True
+    comments: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -57,9 +69,17 @@ class ContentEntry:
     cover: str = ""
     nav: bool = True
     html_body: str = ""
+    plain_text: str = ""
     output_path: Path = Path()
     url: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ImportedDocument:
+    title: str
+    markdown_body: str
+    asset_paths: list[Path] = field(default_factory=list)
 
 
 def slugify(value: str) -> str:
@@ -90,7 +110,6 @@ def parse_metadata_block(lines: list[str]) -> dict[str, Any]:
         line = raw_line.strip()
         if not line or line.startswith("#") or ":" not in line:
             continue
-
         key, raw_value = line.split(":", 1)
         metadata[key.strip().lower()] = parse_metadata_value(raw_value.strip())
     return metadata
@@ -147,14 +166,25 @@ def ensure_list(value: Any) -> list[str]:
     return [str(value).strip()]
 
 
-def text_excerpt(markdown_text: str, limit: int = 180) -> str:
+def strip_front_matter(raw_text: str) -> str:
+    _, body = parse_front_matter(raw_text)
+    return body
+
+
+def markdown_to_plain_text(markdown_text: str) -> str:
     cleaned = markdown_text
     cleaned = re.sub(r"```.*?```", " ", cleaned, flags=re.S)
+    cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
     cleaned = re.sub(r"!\[(.*?)\]\((.*?)\)", r"\1", cleaned)
     cleaned = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", cleaned)
     cleaned = re.sub(r"^[#>\-\*\d\.\s]+", "", cleaned, flags=re.M)
-    cleaned = cleaned.replace("`", "")
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def text_excerpt(markdown_text: str, limit: int = 180) -> str:
+    cleaned = markdown_to_plain_text(markdown_text)
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[: limit - 1].rstrip() + "…"
@@ -164,9 +194,31 @@ def relative_href(from_dir: Path, target_path: Path) -> str:
     return Path(os.path.relpath(target_path, from_dir)).as_posix()
 
 
+def normalize_paragraphs(text: str) -> str:
+    paragraphs = [re.sub(r"\s+", " ", block).strip() for block in re.split(r"\n\s*\n", text)]
+    return "\n\n".join(block for block in paragraphs if block)
+
+
+def normalize_content_subdir(folder: str | None) -> Path:
+    if not folder:
+        return Path()
+    raw = folder.replace("\\", "/").strip().strip("/")
+    if not raw:
+        return Path()
+    subdir = Path(raw)
+    if subdir.is_absolute() or ".." in subdir.parts:
+        raise ValueError("folder 只能是内容目录下的相对路径，不能使用绝对路径或 `..`。")
+    return subdir
+
+
+def relative_markdown_asset_path(markdown_dir: Path, asset_path: Path) -> str:
+    return Path(os.path.relpath(asset_path, markdown_dir)).as_posix()
+
+
 def load_config() -> SiteConfig:
     if not CONFIG_PATH.exists():
         return SiteConfig()
+
     data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     defaults = SiteConfig()
     values = {
@@ -177,6 +229,9 @@ def load_config() -> SiteConfig:
         "language": data.get("language", defaults.language),
         "site_url": data.get("site_url", defaults.site_url),
         "footer": data.get("footer", defaults.footer),
+        "theme": data.get("theme", defaults.theme),
+        "search_enabled": bool(data.get("search_enabled", defaults.search_enabled)),
+        "comments": data.get("comments", {}),
     }
     return SiteConfig(**values)
 
@@ -221,6 +276,7 @@ def build_entries_from_directory(directory: Path, kind: str) -> list[ContentEntr
                 draft=draft,
                 cover=cover,
                 nav=nav,
+                plain_text=markdown_to_plain_text(body_markdown),
                 metadata=metadata,
             )
         )
@@ -405,8 +461,7 @@ class MarkdownRenderer:
 
     def restore(self, text: str) -> str:
         def replacer(match: re.Match[str]) -> str:
-            index = int(match.group(1))
-            return self.placeholders[index]
+            return self.placeholders[int(match.group(1))]
 
         return INLINE_PLACEHOLDER_RE.sub(replacer, text)
 
@@ -448,11 +503,7 @@ class MarkdownRenderer:
             return None
 
         if raw_url.startswith("/"):
-            candidates = [
-                CONTENT_DIR / raw_url.lstrip("/"),
-                STATIC_DIR / raw_url.lstrip("/"),
-                ROOT / raw_url.lstrip("/"),
-            ]
+            candidates = [CONTENT_DIR / raw_url.lstrip("/"), STATIC_DIR / raw_url.lstrip("/"), ROOT / raw_url.lstrip("/")]
             for candidate in candidates:
                 if candidate.exists():
                     return candidate.resolve()
@@ -483,7 +534,6 @@ def target_path_for_static_asset(source_path: Path) -> Path | None:
 def copy_tree_contents(source: Path, target: Path, ignore_markdown: bool = False) -> None:
     if not source.exists():
         return
-
     for path in source.rglob("*"):
         if path.is_dir():
             continue
@@ -494,12 +544,137 @@ def copy_tree_contents(source: Path, target: Path, ignore_markdown: bool = False
         shutil.copy2(path, destination)
 
 
-def render_navigation(config: SiteConfig, pages: list[ContentEntry], page_dir: Path) -> str:
-    links = [f'<a href="{relative_href(page_dir, DIST_DIR / "index.html")}">首页</a>']
+def get_theme_dir(theme_name: str) -> Path:
+    theme_dir = THEMES_DIR / theme_name
+    if (theme_dir / "templates").exists():
+        return theme_dir
+    return THEMES_DIR / DEFAULT_THEME
+
+
+def get_theme_template(theme_name: str, template_name: str) -> str:
+    theme_dir = get_theme_dir(theme_name)
+    candidates = [theme_dir / "templates" / template_name]
+    if theme_dir.name != DEFAULT_THEME:
+        candidates.append(THEMES_DIR / DEFAULT_THEME / "templates" / template_name)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+    raise FileNotFoundError(f"Missing template: {template_name}")
+
+
+def render_template(template_text: str, context: dict[str, Any]) -> str:
+    return TEMPLATE_TOKEN_RE.sub(lambda match: str(context.get(match.group(1), "")), template_text)
+
+
+def copy_theme_assets(theme_name: str) -> None:
+    default_assets = THEMES_DIR / DEFAULT_THEME / "assets"
+    copy_tree_contents(default_assets, THEME_DIST_DIR)
+    if theme_name != DEFAULT_THEME:
+        custom_assets = THEMES_DIR / theme_name / "assets"
+        copy_tree_contents(custom_assets, THEME_DIST_DIR)
+
+
+def theme_asset_href(page_dir: Path, asset_name: str) -> str:
+    return relative_href(page_dir, THEME_DIST_DIR / asset_name)
+
+
+def render_navigation(config: SiteConfig, pages: list[ContentEntry], page_dir: Path, current_nav: str = "") -> str:
+    def nav_link(label: str, href: str, nav_key: str) -> str:
+        active = ' class="is-active" aria-current="page"' if current_nav == nav_key else ""
+        return f'<a href="{href}"{active}>{label}</a>'
+
+    links = [
+        nav_link("首页", relative_href(page_dir, DIST_DIR / "index.html"), "home"),
+        nav_link("文章", relative_href(page_dir, DIST_DIR / "articles" / "index.html"), "articles"),
+    ]
     visible_pages = [page for page in pages if page.nav and not page.draft]
     for page in visible_pages:
-        links.append(f'<a href="{relative_href(page_dir, page.output_path)}">{html.escape(page.title)}</a>')
+        links.append(
+            nav_link(html.escape(page.title), relative_href(page_dir, page.output_path), f"page:{page.slug}")
+        )
     return "\n".join(links)
+
+
+def render_header_search(config: SiteConfig, page_dir: Path) -> str:
+    if not config.search_enabled:
+        return ""
+    search_action = html.escape(relative_href(page_dir, DIST_DIR / "search" / "index.html"), quote=True)
+    return (
+        f'<form class="header-search" action="{search_action}" method="get">'
+        '<label class="header-search__label" for="global-search-input">全站搜索</label>'
+        '<input id="global-search-input" class="header-search__input" type="search" name="q" '
+        'placeholder="搜索文章..." />'
+        '<button class="header-search__submit" type="submit">搜索</button>'
+        "</form>"
+    )
+
+
+def render_theme_init_script() -> str:
+    return (
+        "<script>"
+        "(function(){"
+        "var theme='light';"
+        "try{"
+        "var saved=window.localStorage.getItem('rookieblog-theme');"
+        "if(saved==='light'||saved==='dark'){theme=saved;}"
+        "else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){theme='dark';}"
+        "}catch(error){"
+        "if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){theme='dark';}"
+        "}"
+        "document.documentElement.dataset.theme=theme;"
+        "})();"
+        "</script>"
+    )
+
+
+def render_comments_block(config: SiteConfig, post: ContentEntry) -> str:
+    comments = config.comments or {}
+    provider = str(comments.get("provider", "")).strip().lower()
+    if not provider:
+        return ""
+
+    wrapper_start = '<section class="comments-card"><div class="eyebrow">评论</div><h2>交流与反馈</h2>'
+    wrapper_end = "</section>"
+
+    if provider == "giscus":
+        required = ["repo", "repo_id", "category", "category_id"]
+        if not all(comments.get(key) for key in required):
+            return wrapper_start + "<p>已启用 Giscus，但站点配置里的评论字段还没有填写完整。</p>" + wrapper_end
+        attrs = {
+            "src": "https://giscus.app/client.js",
+            "data-repo": comments["repo"],
+            "data-repo-id": comments["repo_id"],
+            "data-category": comments["category"],
+            "data-category-id": comments["category_id"],
+            "data-mapping": comments.get("mapping", "pathname"),
+            "data-strict": str(comments.get("strict", "0")),
+            "data-reactions-enabled": str(comments.get("reactions_enabled", "1")),
+            "data-emit-metadata": comments.get("emit_metadata", "0"),
+            "data-input-position": comments.get("input_position", "top"),
+            "data-theme": comments.get("theme", "preferred_color_scheme"),
+            "data-lang": comments.get("lang", config.language),
+            "crossorigin": "anonymous",
+            "async": "async",
+        }
+        attr_html = " ".join(f'{key}="{html.escape(str(value), quote=True)}"' for key, value in attrs.items())
+        return wrapper_start + f'<div class="comments-embed"><script {attr_html}></script></div>' + wrapper_end
+
+    if provider == "utterances":
+        if not comments.get("repo"):
+            return wrapper_start + "<p>已启用 Utterances，但 `comments.repo` 还没有配置。</p>" + wrapper_end
+        attrs = {
+            "src": "https://utteranc.es/client.js",
+            "repo": comments["repo"],
+            "issue-term": comments.get("issue_term", "pathname"),
+            "theme": comments.get("theme", "github-light"),
+            "label": comments.get("label", "comment"),
+            "crossorigin": "anonymous",
+            "async": "async",
+        }
+        attr_html = " ".join(f'{key}="{html.escape(str(value), quote=True)}"' for key, value in attrs.items())
+        return wrapper_start + f'<div class="comments-embed"><script {attr_html}></script></div>' + wrapper_end
+
+    return wrapper_start + f"<p>暂不支持的评论提供方：{html.escape(provider)}</p>" + wrapper_end
 
 
 def wrap_layout(
@@ -511,95 +686,301 @@ def wrap_layout(
     pages: list[ContentEntry],
     page_dir: Path,
     page_class: str,
+    current_nav: str = "",
+    extra_head_html: str = "",
+    extra_body_html: str = "",
 ) -> str:
-    stylesheet_href = relative_href(page_dir, DIST_DIR / "style.css")
-    favicon_href = relative_href(page_dir, DIST_DIR / "favicon.svg")
-    home_href = relative_href(page_dir, DIST_DIR / "index.html")
-    navigation = render_navigation(config, pages, page_dir)
+    template_text = get_theme_template(config.theme, "base.html")
     page_title = f"{title} | {config.title}" if title != config.title else config.title
-    return f"""<!DOCTYPE html>
-<html lang="{html.escape(config.language, quote=True)}">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{html.escape(page_title)}</title>
-  <meta name="description" content="{html.escape(description, quote=True)}" />
-  <link rel="icon" href="{favicon_href}" type="image/svg+xml" />
-  <link rel="stylesheet" href="{stylesheet_href}" />
-</head>
-<body class="{html.escape(page_class, quote=True)}">
-  <header class="site-header">
-    <div class="shell site-header__inner">
-      <a class="brand" href="{home_href}">{html.escape(config.title)}</a>
-      <nav class="nav-links">
-        {navigation}
-      </nav>
-    </div>
-  </header>
-  <main class="shell page-shell">
-    {content_html}
-  </main>
-  <footer class="site-footer">
-    <div class="shell site-footer__inner">
-      <p>{html.escape(config.footer)}</p>
-    </div>
-  </footer>
-</body>
-</html>
-"""
+    context = {
+        "language": html.escape(config.language, quote=True),
+        "page_title": html.escape(page_title),
+        "meta_description": html.escape(description or config.description, quote=True),
+        "favicon_href": relative_href(page_dir, DIST_DIR / "favicon.svg"),
+        "theme_init_html": render_theme_init_script(),
+        "theme_css_href": theme_asset_href(page_dir, "theme.css"),
+        "theme_toggle_js_href": theme_asset_href(page_dir, "theme-toggle.js"),
+        "home_href": relative_href(page_dir, DIST_DIR / "index.html"),
+        "site_title": html.escape(config.title),
+        "navigation_html": render_navigation(config, pages, page_dir, current_nav),
+        "header_search_html": render_header_search(config, page_dir),
+        "content_html": content_html,
+        "footer_html": html.escape(config.footer),
+        "page_class": html.escape(page_class, quote=True),
+        "extra_head_html": extra_head_html,
+        "extra_body_html": extra_body_html,
+    }
+    return render_template(template_text, context)
 
 
-def render_post_page(post: ContentEntry, config: SiteConfig, pages: list[ContentEntry]) -> str:
-    page_dir = post.output_path.parent
-    tag_html = "".join(f'<li class="tag-chip">{html.escape(tag)}</li>' for tag in post.tags)
-    cover_html = ""
-    if post.cover:
-        renderer = MarkdownRenderer({})
-        cover_url = renderer.resolve_url(post.cover, post.source_path, page_dir)
-        cover_html = (
-            '<figure class="post-cover">'
-            f'<img src="{html.escape(cover_url, quote=True)}" alt="{html.escape(post.title, quote=True)}" loading="lazy" />'
-            "</figure>"
+def render_tags(tags: list[str]) -> str:
+    if not tags:
+        return ""
+    tag_html = "".join(f'<li class="tag-chip">{html.escape(tag)}</li>' for tag in tags)
+    return f'<ul class="tag-list">{tag_html}</ul>'
+
+
+def render_cover(post: ContentEntry, page_dir: Path) -> str:
+    if not post.cover:
+        return ""
+    renderer = MarkdownRenderer({})
+    cover_url = renderer.resolve_url(post.cover, post.source_path, page_dir)
+    return (
+        '<figure class="post-cover">'
+        f'<img src="{html.escape(cover_url, quote=True)}" alt="{html.escape(post.title, quote=True)}" loading="lazy" />'
+        "</figure>"
+    )
+
+
+def extract_heading_outline(markdown_text: str) -> list[dict[str, Any]]:
+    headings: list[dict[str, Any]] = []
+    used_ids: set[str] = set()
+    for raw_line in markdown_text.splitlines():
+        stripped = raw_line.strip()
+        match = re.match(r"^(#{1,6})\s+(.*)$", stripped)
+        if not match:
+            continue
+        title = markdown_to_plain_text(match.group(2).strip())
+        if not title:
+            continue
+        headings.append(
+            {
+                "level": len(match.group(1)),
+                "title": title,
+                "id": make_unique_slug(slugify(title), used_ids),
+            }
         )
-    post_content = f"""
-<article class="article-card">
-  <div class="eyebrow">博客文章</div>
-  <h1>{html.escape(post.title)}</h1>
-  <p class="article-lead">{html.escape(post.summary)}</p>
-  <div class="meta-row">
-    <span>{post.date.strftime("%Y-%m-%d") if post.date else ""}</span>
-    <span>{html.escape(config.author)}</span>
-  </div>
-  {cover_html}
-  <div class="markdown-content">
-    {post.html_body}
-  </div>
-  <ul class="tag-list">{tag_html}</ul>
-</article>
-"""
+    return headings
+
+
+def inject_heading_ids(html_body: str, headings: list[dict[str, Any]]) -> str:
+    index = 0
+
+    def replacer(match: re.Match[str]) -> str:
+        nonlocal index
+        if index >= len(headings):
+            return match.group(0)
+        heading = headings[index]
+        index += 1
+        level = match.group(1)
+        return f'<h{level} id="{html.escape(str(heading["id"]), quote=True)}">{match.group(2)}</h{level}>'
+
+    return re.sub(r"<h([1-6])>(.*?)</h\1>", replacer, html_body, flags=re.S)
+
+
+def render_post_outline(post: ContentEntry, headings: list[dict[str, Any]]) -> str:
+    outline_headings = [item for item in headings if item["level"] >= 2]
+    if not outline_headings and headings:
+        outline_headings = [
+            item for item in headings if not (item["level"] == 1 and item["title"].strip() == post.title.strip())
+        ] or headings[:1]
+
+    if not outline_headings:
+        return (
+            '<section class="sidebar-card">'
+            '<div class="eyebrow">文章大纲</div>'
+            "<h2>目录</h2>"
+            '<p class="sidebar-empty">这篇文章还没有可展示的小节标题。</p>'
+            "</section>"
+        )
+
+    base_level = min(int(item["level"]) for item in outline_headings)
+    items: list[str] = []
+    for item in outline_headings:
+        offset = max(0, min(int(item["level"]) - base_level, 3))
+        items.append(
+            '<li class="toc-item toc-item--level-{level}">'
+            '<a href="#{anchor}">{title}</a>'
+            "</li>".format(
+                level=offset,
+                anchor=html.escape(str(item["id"]), quote=True),
+                title=html.escape(str(item["title"])),
+            )
+        )
+    return (
+        '<section class="sidebar-card">'
+        '<div class="eyebrow">文章大纲</div>'
+        "<h2>目录</h2>"
+        f'<ul class="toc-list">{"".join(items)}</ul>'
+        "</section>"
+    )
+
+
+def entry_topics(entry: ContentEntry) -> list[str]:
+    categories = ensure_list(entry.metadata.get("categories"))
+    if not categories and entry.metadata.get("category"):
+        categories = ensure_list(entry.metadata.get("category"))
+    return categories or entry.tags
+
+
+def entry_folder_group(entry: ContentEntry) -> str:
+    try:
+        relative_parent = entry.source_path.relative_to(POSTS_DIR.resolve()).parent
+    except ValueError:
+        return ""
+    if str(relative_parent) == ".":
+        return ""
+    return relative_parent.as_posix()
+
+
+def entry_primary_category(entry: ContentEntry) -> str:
+    folder_group = entry_folder_group(entry)
+    if folder_group:
+        return folder_group
+    categories = ensure_list(entry.metadata.get("categories"))
+    if not categories and entry.metadata.get("category"):
+        categories = ensure_list(entry.metadata.get("category"))
+    return categories[0] if categories else ""
+
+
+def category_label(category_key: str) -> str:
+    if not category_key:
+        return "未分类"
+    normalized = category_key.replace("\\", "/").strip("/")
+    return " / ".join(part for part in normalized.split("/") if part) or "未分类"
+
+
+def category_slug(category_key: str) -> str:
+    if not category_key:
+        return "uncategorized"
+    normalized = category_key.replace("\\", "/").strip("/")
+    parts = [slugify(part) or "item" for part in normalized.split("/") if part]
+    return "--".join(parts) or "uncategorized"
+
+
+def category_output_path(category_key: str) -> Path:
+    return DIST_DIR / "categories" / category_slug(category_key) / "index.html"
+
+
+def collect_post_categories(posts: list[ContentEntry]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[ContentEntry]] = {}
+    for post in posts:
+        if post.draft:
+            continue
+        grouped.setdefault(entry_primary_category(post), []).append(post)
+
+    categories: list[dict[str, Any]] = []
+    for key, items in grouped.items():
+        sorted_items = sorted(items, key=lambda item: item.date or datetime.min, reverse=True)
+        categories.append(
+            {
+                "key": key,
+                "label": category_label(key),
+                "output_path": category_output_path(key),
+                "posts": sorted_items,
+            }
+        )
+
+    categories.sort(key=lambda item: (item["key"] == "", str(item["label"]).casefold()))
+    return categories
+
+
+def find_related_posts(current_post: ContentEntry, posts: list[ContentEntry], limit: int = 4) -> list[ContentEntry]:
+    current_category = entry_primary_category(current_post)
+    related_posts = [
+        candidate
+        for candidate in posts
+        if not candidate.draft
+        and candidate.slug != current_post.slug
+        and entry_primary_category(candidate) == current_category
+    ]
+    related_posts.sort(key=lambda item: item.date or datetime.min, reverse=True)
+    return related_posts[:limit]
+
+
+def render_related_posts(post: ContentEntry, posts: list[ContentEntry], page_dir: Path) -> str:
+    category_key = entry_primary_category(post)
+    category_name = category_label(category_key)
+    category_href = html.escape(relative_href(page_dir, category_output_path(category_key)), quote=True)
+    related_posts = find_related_posts(post, posts)
+    if not related_posts:
+        return (
+            '<section class="sidebar-card">'
+            '<div class="eyebrow">同分类文章</div>'
+            '<div class="sidebar-card__head">'
+            f"<h2>{html.escape(category_name)}</h2>"
+            f'<a class="sidebar-card__action" href="{category_href}">查看分类</a>'
+            "</div>"
+            '<p class="sidebar-empty">这个分类下暂时只有这一篇文章。</p>'
+            "</section>"
+        )
+
+    items: list[str] = []
+    for candidate in related_posts:
+        date_text = candidate.date.strftime("%Y-%m-%d") if candidate.date else "文章"
+        items.append(
+            '<li class="related-item">'
+            '<a class="related-item__title" href="{href}">{title}</a>'
+            '<p class="related-item__summary">{summary}</p>'
+            '<div class="related-item__meta">'
+            '<span>{date}</span>'
+            '<span class="related-item__tag">{category}</span>'
+            "</div>"
+            "</li>".format(
+                href=html.escape(relative_href(page_dir, candidate.output_path), quote=True),
+                title=html.escape(candidate.title),
+                summary=html.escape(candidate.summary),
+                date=html.escape(date_text),
+                category=html.escape(category_name),
+            )
+        )
+    return (
+        '<section class="sidebar-card">'
+        '<div class="eyebrow">同分类文章</div>'
+        '<div class="sidebar-card__head">'
+        f"<h2>{html.escape(category_name)}</h2>"
+        f'<a class="sidebar-card__action" href="{category_href}">查看分类</a>'
+        "</div>"
+        f'<ul class="related-list">{"".join(items)}</ul>'
+        "</section>"
+    )
+
+
+def render_post_page(post: ContentEntry, config: SiteConfig, posts: list[ContentEntry], pages: list[ContentEntry]) -> str:
+    page_dir = post.output_path.parent
+    headings = extract_heading_outline(post.body_markdown)
+    body_html = inject_heading_ids(post.html_body, headings)
+    content_template = get_theme_template(config.theme, "post.html")
+    content_html = render_template(
+        content_template,
+        {
+            "entry_label": "博客文章",
+            "entry_title": html.escape(post.title),
+            "entry_summary": html.escape(post.summary),
+            "entry_date": post.date.strftime("%Y-%m-%d") if post.date else "",
+            "author_name": html.escape(config.author),
+            "cover_html": render_cover(post, page_dir),
+            "body_html": body_html,
+            "tags_html": render_tags(post.tags),
+            "post_outline_html": render_post_outline(post, headings),
+            "related_posts_html": render_related_posts(post, posts, page_dir),
+            "comments_html": render_comments_block(config, post),
+        },
+    )
     return wrap_layout(
         config=config,
         title=post.title,
         description=post.summary or config.description,
-        content_html=post_content,
+        content_html=content_html,
         pages=pages,
         page_dir=page_dir,
         page_class="post-page",
+        current_nav="articles",
     )
 
 
 def render_page_page(page: ContentEntry, config: SiteConfig, pages: list[ContentEntry]) -> str:
     page_dir = page.output_path.parent
-    content_html = f"""
-<article class="article-card">
-  <div class="eyebrow">独立页面</div>
-  <h1>{html.escape(page.title)}</h1>
-  <p class="article-lead">{html.escape(page.summary or config.description)}</p>
-  <div class="markdown-content">
-    {page.html_body}
-  </div>
-</article>
-"""
+    content_template = get_theme_template(config.theme, "page.html")
+    content_html = render_template(
+        content_template,
+        {
+            "entry_label": "独立页面",
+            "entry_title": html.escape(page.title),
+            "entry_summary": html.escape(page.summary or config.description),
+            "body_html": page.html_body,
+        },
+    )
     return wrap_layout(
         config=config,
         title=page.title,
@@ -608,12 +989,12 @@ def render_page_page(page: ContentEntry, config: SiteConfig, pages: list[Content
         pages=pages,
         page_dir=page_dir,
         page_class="page-page",
+        current_nav=f"page:{page.slug}",
     )
 
 
-def render_home_page(posts: list[ContentEntry], config: SiteConfig, pages: list[ContentEntry]) -> str:
-    page_dir = DIST_DIR
-    cards = []
+def render_post_cards(posts: list[ContentEntry], page_dir: Path, theme_name: str) -> str:
+    cards: list[str] = []
     for post in posts:
         if post.draft:
             continue
@@ -622,47 +1003,65 @@ def render_home_page(posts: list[ContentEntry], config: SiteConfig, pages: list[
             renderer = MarkdownRenderer({})
             cover_url = renderer.resolve_url(post.cover, post.source_path, page_dir)
             cover = f'<img class="post-card__cover" src="{html.escape(cover_url, quote=True)}" alt="{html.escape(post.title, quote=True)}" loading="lazy" />'
-        tags = "".join(f'<li class="tag-chip">{html.escape(tag)}</li>' for tag in post.tags)
         cards.append(
-            f"""
-<article class="post-card">
-  {cover}
-  <div class="post-card__body">
-    <div class="eyebrow">{post.date.strftime("%Y-%m-%d") if post.date else "文章"}</div>
-    <h2><a href="{html.escape(post.url, quote=True)}">{html.escape(post.title)}</a></h2>
-    <p>{html.escape(post.summary)}</p>
-    <ul class="tag-list">{tags}</ul>
-  </div>
-</article>
-"""
+            render_template(
+                get_theme_template(theme_name, "post_card.html"),
+                {
+                    "card_cover_html": cover,
+                    "card_date": post.date.strftime("%Y-%m-%d") if post.date else "文章",
+                    "card_href": html.escape(relative_href(page_dir, post.output_path), quote=True),
+                    "card_title": html.escape(post.title),
+                    "card_summary": html.escape(post.summary),
+                    "card_tags_html": render_tags(post.tags),
+                },
+            )
         )
+    return "\n".join(cards) if cards else '<p class="empty-state">还没有文章，先执行一次 <code>python3 rookieblog.py new "第一篇文章"</code> 吧。</p>'
 
-    cards_html = "\n".join(cards) if cards else '<p class="empty-state">还没有文章，先执行一次 `python3 rookieblog.py new "第一篇文章"` 吧。</p>'
-    content_html = f"""
-<section class="hero-card">
-  <div class="hero-copy">
-    <div class="eyebrow">轻量静态博客</div>
-    <h1>{html.escape(config.title)}</h1>
-    <p class="hero-lead">{html.escape(config.tagline)}</p>
-    <p class="hero-text">{html.escape(config.description)}</p>
-  </div>
-  <div class="hero-note">
-    <p>无第三方依赖</p>
-    <p>Markdown 原生写作</p>
-    <p>图片直接放仓库</p>
-    <p>GitHub Pages 可直接部署</p>
-  </div>
-</section>
-<section class="section-heading">
-  <div>
-    <div class="eyebrow">最新内容</div>
-    <h2>文章列表</h2>
-  </div>
-</section>
-<section class="post-grid">
-  {cards_html}
-</section>
-"""
+
+def render_category_nav(categories: list[dict[str, Any]], page_dir: Path, current_key: str | None = None) -> str:
+    items = [
+        '<li><a class="category-nav__pill{active}" href="{href}">'
+        '<span>全部文章</span>'
+        "</a></li>".format(
+            active=" is-active" if current_key is None else "",
+            href=html.escape(relative_href(page_dir, DIST_DIR / "articles" / "index.html"), quote=True),
+        )
+    ]
+    for category in categories:
+        items.append(
+            '<li><a class="category-nav__pill{active}" href="{href}">'
+            "<span>{label}</span>"
+            '<span class="category-nav__count">{count}</span>'
+            "</a></li>".format(
+                active=" is-active" if current_key is not None and category["key"] == current_key else "",
+                href=html.escape(relative_href(page_dir, category["output_path"]), quote=True),
+                label=html.escape(str(category["label"])),
+                count=len(category["posts"]),
+            )
+        )
+    return (
+        '<section class="category-nav">'
+        '<div class="eyebrow">文章导航</div>'
+        '<ul class="category-nav__list">'
+        f'{"".join(items)}'
+        "</ul>"
+        "</section>"
+    )
+
+
+def render_home_page(posts: list[ContentEntry], config: SiteConfig, pages: list[ContentEntry], categories: list[dict[str, Any]]) -> str:
+    page_dir = DIST_DIR
+    cards_html = render_post_cards(posts, page_dir, config.theme)
+    content_html = render_template(
+        get_theme_template(config.theme, "home.html"),
+        {
+            "site_title": html.escape(config.title),
+            "site_tagline": html.escape(config.tagline),
+            "site_description": html.escape(config.description),
+            "post_cards_html": cards_html,
+        },
+    )
     return wrap_layout(
         config=config,
         title=config.title,
@@ -671,7 +1070,98 @@ def render_home_page(posts: list[ContentEntry], config: SiteConfig, pages: list[
         pages=pages,
         page_dir=page_dir,
         page_class="home-page",
+        current_nav="home",
     )
+
+
+def render_articles_page(categories: list[dict[str, Any]], posts: list[ContentEntry], config: SiteConfig, pages: list[ContentEntry]) -> str:
+    page_dir = DIST_DIR / "articles"
+    cards_html = render_post_cards(posts, page_dir, config.theme)
+    content_html = render_template(
+        get_theme_template(config.theme, "articles.html"),
+        {
+            "articles_title": "全部文章",
+            "articles_description": html.escape("按分类浏览全部文章，点击卡片即可进入具体内容。"),
+            "category_nav_html": render_category_nav(categories, page_dir),
+            "post_cards_html": cards_html,
+        },
+    )
+    return wrap_layout(
+        config=config,
+        title="文章",
+        description=f"浏览 {config.title} 的全部文章。",
+        content_html=content_html,
+        pages=pages,
+        page_dir=page_dir,
+        page_class="articles-page",
+        current_nav="articles",
+    )
+
+
+def render_category_page(
+    category: dict[str, Any], categories: list[dict[str, Any]], config: SiteConfig, pages: list[ContentEntry]
+) -> str:
+    page_dir = Path(category["output_path"]).parent
+    cards_html = render_post_cards(list(category["posts"]), page_dir, config.theme)
+    content_html = render_template(
+        get_theme_template(config.theme, "category.html"),
+        {
+            "category_title": html.escape(str(category["label"])),
+            "category_description": html.escape(f"查看 {category['label']} 分类下的全部文章。"),
+            "category_nav_html": render_category_nav(categories, page_dir, str(category["key"])),
+            "post_cards_html": cards_html,
+        },
+    )
+    return wrap_layout(
+        config=config,
+        title=f"{category['label']} 分类",
+        description=f"查看 {category['label']} 分类下的全部文章。",
+        content_html=content_html,
+        pages=pages,
+        page_dir=page_dir,
+        page_class="category-page",
+        current_nav="articles",
+    )
+
+
+def render_search_page(config: SiteConfig, pages: list[ContentEntry]) -> str:
+    page_dir = DIST_DIR / "search"
+    content_html = render_template(
+        get_theme_template(config.theme, "search.html"),
+        {
+            "search_index_href": html.escape(relative_href(page_dir, DIST_DIR / "search-index.json"), quote=True),
+            "site_title": html.escape(config.title),
+        },
+    )
+    extra_body_html = f'<script src="{theme_asset_href(page_dir, "search.js")}" defer></script>'
+    return wrap_layout(
+        config=config,
+        title="搜索",
+        description=f"搜索 {config.title} 的全部文章与页面内容。",
+        content_html=content_html,
+        pages=pages,
+        page_dir=page_dir,
+        page_class="search-page",
+        current_nav="articles",
+        extra_body_html=extra_body_html,
+    )
+
+
+def build_search_index(entries: list[ContentEntry]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for entry in entries:
+        items.append(
+            {
+                "title": entry.title,
+                "url": entry.url,
+                "summary": entry.summary,
+                "content": entry.plain_text,
+                "tags": entry.tags,
+                "kind": entry.kind,
+                "date": entry.date.strftime("%Y-%m-%d") if entry.date else "",
+            }
+        )
+    return items
 
 
 def build_site() -> None:
@@ -684,9 +1174,11 @@ def build_site() -> None:
     if DIST_DIR.exists():
         shutil.rmtree(DIST_DIR)
     DIST_DIR.mkdir(parents=True, exist_ok=True)
+    THEME_DIST_DIR.mkdir(parents=True, exist_ok=True)
 
     copy_tree_contents(STATIC_DIR, DIST_DIR)
     copy_tree_contents(CONTENT_DIR, DIST_DIR, ignore_markdown=True)
+    copy_theme_assets(config.theme)
 
     for entry in posts + pages:
         if entry.draft:
@@ -696,31 +1188,59 @@ def build_site() -> None:
 
     published_posts = sorted([post for post in posts if not post.draft], key=lambda item: item.date or datetime.min, reverse=True)
     published_pages = [page for page in pages if not page.draft]
+    post_categories = collect_post_categories(published_posts)
 
     for post in published_posts:
-        post.output_path.write_text(render_post_page(post, config, published_pages), encoding="utf-8")
+        post.output_path.write_text(render_post_page(post, config, published_posts, published_pages), encoding="utf-8")
 
     for page in published_pages:
         page.output_path.write_text(render_page_page(page, config, published_pages), encoding="utf-8")
 
-    (DIST_DIR / "index.html").write_text(render_home_page(published_posts, config, published_pages), encoding="utf-8")
+    (DIST_DIR / "index.html").write_text(
+        render_home_page(published_posts, config, published_pages, post_categories), encoding="utf-8"
+    )
+
+    articles_dir = DIST_DIR / "articles"
+    articles_dir.mkdir(parents=True, exist_ok=True)
+    (articles_dir / "index.html").write_text(
+        render_articles_page(post_categories, published_posts, config, published_pages), encoding="utf-8"
+    )
+
+    for category in post_categories:
+        category_path = Path(category["output_path"])
+        category_path.parent.mkdir(parents=True, exist_ok=True)
+        category_path.write_text(render_category_page(category, post_categories, config, published_pages), encoding="utf-8")
+
+    if config.search_enabled:
+        search_dir = DIST_DIR / "search"
+        search_dir.mkdir(parents=True, exist_ok=True)
+        (search_dir / "index.html").write_text(render_search_page(config, published_pages), encoding="utf-8")
+        search_items = build_search_index(published_posts + published_pages)
+        (DIST_DIR / "search-index.json").write_text(
+            json.dumps(search_items, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
     (DIST_DIR / ".nojekyll").write_text("", encoding="utf-8")
 
 
-def create_new_post(title: str) -> Path:
-    POSTS_DIR.mkdir(parents=True, exist_ok=True)
+def create_new_post(title: str, folder: str | None = None) -> Path:
+    subdir = normalize_content_subdir(folder)
+    target_dir = POSTS_DIR / subdir
+    target_dir.mkdir(parents=True, exist_ok=True)
     slug = slugify(title)
-    target = POSTS_DIR / f"{slug}.md"
+    target = target_dir / f"{slug}.md"
     if target.exists():
         timestamp = datetime.now().strftime("%H%M%S")
-        target = POSTS_DIR / f"{slug}-{timestamp}.md"
+        target = target_dir / f"{slug}-{timestamp}.md"
     today = datetime.now().strftime("%Y-%m-%d")
+    demo_image = "/assets/images/local-demo.svg"
     template = f"""---
 title: {title}
 date: {today}
 summary: 用一句话介绍这篇文章。
 tags: [Markdown, GitHub Pages]
-cover: ../assets/images/local-demo.svg
+cover: {demo_image}
 ---
 
 # {title}
@@ -729,7 +1249,7 @@ cover: ../assets/images/local-demo.svg
 
 ## 可以直接插入本地图片
 
-![示例图片](../assets/images/local-demo.svg)
+![示例图片]({demo_image})
 
 ## 也可以放代码块
 
@@ -754,17 +1274,230 @@ def serve_site(port: int) -> None:
         server.server_close()
 
 
+class HTMLToMarkdownParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.blocks: list[str] = []
+        self.current: list[str] = []
+        self.current_tag: str | None = None
+        self.list_depth = 0
+        self.skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style"}:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "blockquote", "pre"}:
+            self.flush()
+            self.current_tag = tag
+        elif tag == "br":
+            self.current.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style"} and self.skip_depth:
+            self.skip_depth -= 1
+            return
+        if self.skip_depth:
+            return
+        if tag == self.current_tag:
+            self.flush()
+            self.current_tag = None
+
+    def handle_data(self, data: str) -> None:
+        if self.skip_depth:
+            return
+        if data:
+            self.current.append(data)
+
+    def flush(self) -> None:
+        text = html.unescape("".join(self.current))
+        text = re.sub(r"\s+", " ", text).strip()
+        self.current.clear()
+        if not text:
+            return
+        if self.current_tag and self.current_tag.startswith("h"):
+            level = int(self.current_tag[1])
+            self.blocks.append(f'{"#" * level} {text}')
+            return
+        if self.current_tag == "li":
+            self.blocks.append(f"- {text}")
+            return
+        if self.current_tag == "blockquote":
+            self.blocks.append(f"> {text}")
+            return
+        self.blocks.append(text)
+
+    def to_markdown(self) -> str:
+        self.flush()
+        return "\n\n".join(block for block in self.blocks if block)
+
+
+def import_txt_document(source_path: Path) -> ImportedDocument:
+    raw_text = source_path.read_text(encoding="utf-8")
+    return ImportedDocument(title=source_path.stem.replace("-", " ").strip(), markdown_body=normalize_paragraphs(raw_text))
+
+
+def import_markdown_document(source_path: Path) -> ImportedDocument:
+    raw_text = source_path.read_text(encoding="utf-8")
+    metadata, body = parse_front_matter(raw_text)
+    title = str(metadata.get("title") or source_path.stem.replace("-", " ").strip())
+    return ImportedDocument(title=title, markdown_body=body.strip())
+
+
+def import_html_document(source_path: Path) -> ImportedDocument:
+    parser = HTMLToMarkdownParser()
+    parser.feed(source_path.read_text(encoding="utf-8"))
+    return ImportedDocument(title=source_path.stem.replace("-", " ").strip(), markdown_body=parser.to_markdown())
+
+
+def import_docx_document(source_path: Path, slug: str, markdown_dir: Path) -> ImportedDocument:
+    markdown_blocks: list[str] = []
+    imported_assets: list[Path] = []
+    title = source_path.stem.replace("-", " ").strip()
+
+    with zipfile.ZipFile(source_path) as archive:
+        document_xml = archive.read("word/document.xml")
+        root = ET.fromstring(document_xml)
+
+        for paragraph in root.findall(".//w:body/w:p", WORD_NAMESPACE):
+            text_parts = [node.text for node in paragraph.findall(".//w:t", WORD_NAMESPACE) if node.text]
+            text = "".join(text_parts).strip()
+            if not text:
+                continue
+            style_node = paragraph.find("./w:pPr/w:pStyle", WORD_NAMESPACE)
+            style = style_node.attrib.get(f'{{{WORD_NAMESPACE["w"]}}}val', "") if style_node is not None else ""
+            if style.lower().startswith("title") and title == source_path.stem.replace("-", " ").strip():
+                title = text
+                continue
+            if style.lower().startswith("heading"):
+                level_match = re.search(r"(\d+)", style)
+                level = max(1, min(int(level_match.group(1)) if level_match else 2, 6))
+                markdown_blocks.append(f'{"#" * level} {text}')
+            else:
+                markdown_blocks.append(text)
+
+        media_dir = CONTENT_DIR / "assets" / "imports" / slug
+        for info in archive.infolist():
+            if not info.filename.startswith("word/media/"):
+                continue
+            target = media_dir / Path(info.filename).name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(archive.read(info.filename))
+            imported_assets.append(target)
+
+    markdown_body = "\n\n".join(markdown_blocks).strip()
+    if imported_assets:
+        image_blocks = [f"![导入图片](/assets/imports/{slug}/{asset.name})" for asset in imported_assets]
+        markdown_body += "\n\n## 文档图片\n\n" + "\n\n".join(image_blocks)
+
+    return ImportedDocument(title=title, markdown_body=markdown_body, asset_paths=imported_assets)
+
+
+def import_pdf_document(source_path: Path) -> ImportedDocument:
+    try:
+        result = subprocess.run(
+            ["pdftotext", str(source_path), "-"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("导入 PDF 需要本机安装 `pdftotext` 命令。") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"PDF 转文本失败：{exc.stderr.strip() or exc}") from exc
+
+    markdown_body = normalize_paragraphs(result.stdout)
+    return ImportedDocument(title=source_path.stem.replace("-", " ").strip(), markdown_body=markdown_body)
+
+
+def import_source_document(source_path: Path, slug: str, markdown_dir: Path) -> ImportedDocument:
+    suffix = source_path.suffix.lower()
+    if suffix == ".txt":
+        return import_txt_document(source_path)
+    if suffix == ".md":
+        return import_markdown_document(source_path)
+    if suffix in {".html", ".htm"}:
+        return import_html_document(source_path)
+    if suffix == ".docx":
+        return import_docx_document(source_path, slug, markdown_dir)
+    if suffix == ".pdf":
+        return import_pdf_document(source_path)
+    if suffix == ".doc":
+        raise RuntimeError("`.doc` 是旧版二进制格式，建议先另存为 `.docx` 再导入。")
+    raise RuntimeError(f"暂不支持导入 `{suffix or '无扩展名'}` 文件。")
+
+
+def create_imported_entry(
+    source: str,
+    *,
+    title: str | None,
+    slug: str | None,
+    folder: str | None,
+    tags: str,
+    date: str | None,
+    summary: str | None,
+    as_page: bool,
+) -> Path:
+    source_path = Path(source).expanduser().resolve()
+    if not source_path.exists():
+        raise FileNotFoundError(f"Source file not found: {source_path}")
+
+    entry_slug = slugify(slug or title or source_path.stem)
+    subdir = normalize_content_subdir(folder)
+    base_dir = PAGES_DIR if as_page else POSTS_DIR
+    target_dir = base_dir / subdir
+    imported = import_source_document(source_path, entry_slug, target_dir)
+    final_title = title or imported.title or source_path.stem.replace("-", " ").strip()
+    final_date = date or datetime.now().strftime("%Y-%m-%d")
+    final_summary = summary or text_excerpt(imported.markdown_body)
+    tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+    tag_line = f"[{', '.join(tag_list)}]" if tag_list else "[]"
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{entry_slug}.md"
+    if target.exists():
+        target = target_dir / f"{entry_slug}-{datetime.now().strftime('%H%M%S')}.md"
+
+    metadata_lines = [
+        "---",
+        f"title: {final_title}",
+        f"slug: {entry_slug}",
+        f"summary: {final_summary}",
+        f"tags: {tag_line}",
+    ]
+    if not as_page:
+        metadata_lines.append(f"date: {final_date}")
+    metadata_lines.append("---")
+    metadata_lines.append("")
+    metadata_lines.append(imported.markdown_body.strip())
+    target.write_text("\n".join(metadata_lines).strip() + "\n", encoding="utf-8")
+    return target
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="A tiny dependency-free static blog generator.")
+    parser = argparse.ArgumentParser(description="A tiny dependency-light static blog generator.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("build", help="Generate the static site into dist/.")
 
     new_parser = subparsers.add_parser("new", help="Create a new Markdown post.")
     new_parser.add_argument("title", help="Title of the new post.")
+    new_parser.add_argument("--folder", help="Optional posts subfolder, e.g. LLM or notes/ai.")
 
     serve_parser = subparsers.add_parser("serve", help="Build and serve the site locally.")
     serve_parser.add_argument("--port", type=int, default=8000, help="Local port. Default: 8000.")
+
+    import_parser = subparsers.add_parser("import", help="Import txt/md/html/docx/pdf into a blog entry.")
+    import_parser.add_argument("source", help="Source document path.")
+    import_parser.add_argument("--title", help="Override imported title.")
+    import_parser.add_argument("--slug", help="Override output slug.")
+    import_parser.add_argument("--folder", help="Optional target subfolder, e.g. LLM or notes/ai.")
+    import_parser.add_argument("--tags", default="", help="Comma-separated tags, e.g. Python,Notes.")
+    import_parser.add_argument("--date", help="Post date, e.g. 2026-04-21.")
+    import_parser.add_argument("--summary", help="Override summary text.")
+    import_parser.add_argument("--page", action="store_true", help="Import as a standalone page instead of a post.")
     return parser
 
 
@@ -778,12 +1511,26 @@ def main() -> None:
         return
 
     if args.command == "new":
-        created = create_new_post(args.title)
+        created = create_new_post(args.title, folder=args.folder)
         print(f"Created {created}")
         return
 
     if args.command == "serve":
         serve_site(args.port)
+        return
+
+    if args.command == "import":
+        created = create_imported_entry(
+            args.source,
+            title=args.title,
+            slug=args.slug,
+            folder=args.folder,
+            tags=args.tags,
+            date=args.date,
+            summary=args.summary,
+            as_page=args.page,
+        )
+        print(f"Imported document to {created}")
         return
 
     parser.print_help()

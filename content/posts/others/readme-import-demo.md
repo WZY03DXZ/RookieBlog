@@ -1,3 +1,11 @@
+---
+title: README 导入示例
+slug: readme-import-demo
+summary: RookieBlog 一个尽量轻量的静态博客框架： 只依赖 Python 标准库，不需要安装第三方包 文章直接写在 Markdown 里 支持从 txt、md、html、docx 导入文章，pdf 可通过本机 pdftotext 导入 自带前端全文搜索 主题从 themes/ 目录扩展 可选接入 Giscus / Utterances 评论 图片、SVG、…
+tags: [导入, Markdown]
+date: 2026-04-21
+---
+
 # RookieBlog
 
 一个尽量轻量的静态博客框架：
@@ -84,7 +92,7 @@ title: 我的第一篇文章
 date: 2026-04-21
 summary: 这是文章摘要。
 tags: [Markdown, GitHub Pages, Python]
-cover: ../assets/images/local-demo.svg
+cover: /assets/images/local-demo.svg
 draft: false
 ---
 ```
@@ -96,7 +104,7 @@ draft: false
 例如：
 
 ```md
-![封面图](../assets/images/local-demo.svg)
+![封面图](/assets/images/local-demo.svg)
 ```
 
 构建时会把 `content/` 里的非 Markdown 文件一起复制到 `dist/`，所以：
