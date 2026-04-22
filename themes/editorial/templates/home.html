@@ -1,0 +1,47 @@
+<section class="hero-card hero-card--home">
+  <div class="hero-copy">
+    <div class="eyebrow">Editorial Front Page</div>
+    <p class="hero-kicker">Quiet publishing with stronger visual rhythm</p>
+    <h1>{{site_title}}</h1>
+    <p class="hero-lead">{{site_tagline}}</p>
+    <p class="hero-text">{{site_description}}</p>
+    <div class="hero-actions">
+      <a class="button-link button-link--primary" href="articles/">浏览文章</a>
+      <a class="button-link button-link--secondary" href="about/">了解本站</a>
+    </div>
+  </div>
+  <aside class="hero-panel">
+    <div class="hero-panel__eyebrow">Theme Notes</div>
+    <h2>像杂志首页一样呈现内容</h2>
+    <p>这套主题强调版式、留白和阅读节奏，让博客更像一个有明确视觉方向的出版页面。</p>
+    <ul class="feature-list">
+      <li>纸张感背景和深青主色</li>
+      <li>大标题分栏布局与信息侧栏</li>
+      <li>更清晰的文章卡片层次</li>
+      <li>阅读页更像专栏和目录页的结合</li>
+    </ul>
+  </aside>
+</section>
+
+<section class="home-ribbon">
+  <article class="ribbon-card">
+    <div class="eyebrow">Writing Flow</div>
+    <h2>从 Markdown 出发，但页面不像默认模板。</h2>
+    <p>保留轻量生成器的直接感，把视觉体验提升到更适合长期展示的状态。</p>
+  </article>
+  <article class="ribbon-card ribbon-card--accent">
+    <div class="eyebrow">Design Direction</div>
+    <p class="ribbon-card__quote">Warm paper, dark ink, copper accents, and a more editorial sense of hierarchy.</p>
+  </article>
+</section>
+
+<section class="section-heading">
+  <div>
+    <div class="eyebrow">Latest Stories</div>
+    <h2>最近发布</h2>
+  </div>
+  <a class="section-link" href="articles/">前往文章中心</a>
+</section>
+<section class="post-grid">
+  {{post_cards_html}}
+</section>

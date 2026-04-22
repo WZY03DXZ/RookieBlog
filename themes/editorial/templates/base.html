@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="{{language}}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{page_title}}</title>
+  <meta name="description" content="{{meta_description}}" />
+  {{theme_init_html}}
+  <link rel="icon" href="{{favicon_href}}" type="image/svg+xml" />
+  <link rel="stylesheet" href="{{theme_css_href}}" />
+  {{extra_head_html}}
+</head>
+<body class="theme-editorial {{page_class}}">
+  <header class="site-header">
+    <div class="shell site-header__inner">
+      <a class="brand" href="{{home_href}}">
+        <span class="brand__mark">RB</span>
+        <span class="brand__text">
+          <span class="brand__eyebrow">Editorial Theme</span>
+          <span class="brand__title">{{site_title}}</span>
+        </span>
+      </a>
+      <div class="site-header__search">
+        {{header_search_html}}
+      </div>
+      <nav class="nav-links">
+        {{navigation_html}}
+        <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="切换暗色模式" title="切换暗色模式">
+          <span class="theme-toggle__track" aria-hidden="true">
+            <span class="theme-toggle__thumb"></span>
+          </span>
+        </button>
+      </nav>
+    </div>
+  </header>
+  <main class="shell page-shell">
+    {{content_html}}
+  </main>
+  <footer class="site-footer">
+    <div class="shell site-footer__inner">
+      <p class="site-footer__note">Magazine-inspired layout for calm publishing.</p>
+      <p>{{footer_html}}</p>
+    </div>
+  </footer>
+  <script src="{{theme_toggle_js_href}}" defer></script>
+  {{extra_body_html}}
+</body>
+</html>
