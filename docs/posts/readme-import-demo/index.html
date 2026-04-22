@@ -31,41 +31,52 @@
     <div class="post-layout">
   <div class="post-main">
     <article class="article-card">
-      <div class="eyebrow">博客文章</div>
-      <h1>README 导入示例</h1>
-      <p class="article-lead">RookieBlog 一个尽量轻量的静态博客框架： 只依赖 Python 标准库，不需要安装第三方包 文章直接写在 Markdown 里 支持从 txt、md、html、docx 导入文章，pdf 可通过本机 pdftotext 导入 自带前端全文搜索 主题从 themes/ 目录扩展 可选接入 Giscus / Utterances 评论 图片、SVG、…</p>
-      <div class="meta-row">
-        <span>2026-04-21</span>
-        <span>Rookie</span>
-      </div>
-      
       <div class="markdown-content">
         <h1 id="rookieblog">RookieBlog</h1>
 <p>一个尽量轻量的静态博客框架：</p>
 <ul>
-<li>只依赖 Python 标准库，不需要安装第三方包</li><li>文章直接写在 Markdown 里</li><li>支持从 <code>txt</code>、<code>md</code>、<code>html</code>、<code>docx</code> 导入文章，<code>pdf</code> 可通过本机 <code>pdftotext</code> 导入</li><li>自带前端全文搜索</li><li>主题从 <code>themes/</code> 目录扩展</li><li>可选接入 Giscus / Utterances 评论</li><li>图片、SVG、附件可以直接放仓库，不需要第三方图床</li><li>生成静态网页，适合部署到 GitHub Pages</li>
+<li>只依赖 Python 标准库，不需要安装第三方包</li><li>文章直接写在 Markdown 里</li><li><code>content/posts/</code> 下的文件夹会自动作为文章分类</li><li>支持从 <code>txt</code>、<code>md</code>、<code>html</code>、<code>docx</code> 导入文章，<code>pdf</code> 可通过本机 <code>pdftotext</code> 导入</li><li>自带前端全文搜索</li><li>自带暗色模式开关</li><li>顶部提供独立的“文章”入口、分类页和文章阅读侧栏</li><li>主题从 <code>themes/</code> 目录扩展</li><li>可选接入 Giscus / Utterances 评论</li><li>图片、SVG、附件可以直接放仓库，不需要第三方图床</li><li>生成静态网页，适合部署到 GitHub Pages</li>
 </ul>
+<p><img src="../../assets/page-images/主页展示.png" alt="alt text" loading="lazy" /> <img src="../../assets/page-images/主页展示2.png" alt="alt text" loading="lazy" /></p>
 <h2 id="目录结构">目录结构</h2>
 <pre><code class="language-text">RookieBlog/
 ├── content/
 │   ├── assets/         # 图片、SVG、附件
 │   ├── pages/          # 独立页面
-│   └── posts/          # 博客文章
+│   └── posts/          # 博客文章，子文件夹会作为分类
 ├── static/             # 公共静态资源，如 favicon、额外素材
 ├── themes/             # 主题模板和样式
 ├── .github/workflows/  # GitHub Pages 自动部署
+├── docs/               # 适用于 GitHub Pages /docs 来源的发布目录
 ├── rookieblog.py       # 生成器脚本
 └── site.json           # 站点配置</code></pre>
 <h2 id="快速开始">快速开始</h2>
 <pre><code class="language-bash">python3 rookieblog.py build</code></pre>
 <p>生成结果会输出到 <code>dist/</code>。</p>
+<p>如果你当前的 GitHub Pages 仍然使用 <code>main</code> 分支下的 <code>/docs</code> 作为发布来源，可以再执行：</p>
+<pre><code class="language-bash">python3 rookieblog.py build-docs</code></pre>
+<p>这个命令会先生成 <code>dist/</code>，再同步到 <code>docs/</code>。</p>
 <p>如果你想本地预览：</p>
 <pre><code class="language-bash">python3 rookieblog.py serve --port 8000</code></pre>
 <h2 id="新建文章">新建文章</h2>
 <pre><code class="language-bash">python3 rookieblog.py new &quot;我的第一篇文章&quot;</code></pre>
 <p>它会在 <code>content/posts/</code> 下生成一篇带 front matter 的 Markdown 文件。</p>
+<p>如果想直接放进分类文件夹：</p>
+<pre><code class="language-bash">python3 rookieblog.py new &quot;NLP 的基础概念&quot; --folder LLM</code></pre>
+<p>这样会生成到：</p>
+<pre><code class="language-text">content/posts/LLM/nlp-de-ji-chu-gai-nian.md</code></pre>
 <h2 id="导入常见文档">导入常见文档</h2>
-<pre><code class="language-bash">python3 rookieblog.py import ./notes.docx --tags 导入,文档</code></pre>
+<pre><code class="language-bash">python3 rookieblog.py import ./notes.docx --folder others --tags 导入,Word
+
+or
+
+python3 rookieblog.py import ./notes.docx --folder others</code></pre>
+<p>导入 PDF 也是一样：</p>
+<pre><code class="language-bash">python3 rookieblog.py import ./paper.pdf --folder LLM --tags 导入,PDF
+
+or
+
+python3 rookieblog.py import ./paper.pdf --folder LLM</code></pre>
 <p>支持：</p>
 <ul>
 <li><code>txt</code></li><li><code>md</code></li><li><code>html</code> / <code>htm</code></li><li><code>docx</code></li><li><code>pdf</code></li>
@@ -92,7 +103,7 @@ draft: false
 <pre><code class="language-md">![封面图](/assets/images/local-demo.svg)</code></pre>
 <p>构建时会把 <code>content/</code> 里的非 Markdown 文件一起复制到 <code>dist/</code>，所以：</p>
 <ul>
-<li><code>content/assets/</code> 里的图片会被一起带到输出目录</li><li>放在文章旁边的本地图片也能一起带过去</li><li>不需要使用第三方图片托管服务</li>
+<li><code>content/assets/</code> 里的图片会被一起带到输出目录</li><li>放在文章旁边的本地图片也能一起带过去</li><li>不需要使用第三方图片托管服务</li><li>推荐优先使用 <code>/assets/...</code> 这种站点内路径，这样文章以后移动到别的分类文件夹也不会丢图</li>
 </ul>
 <h2 id="github-pages-部署">GitHub Pages 部署</h2>
 <p>仓库里已经附带了 <code>.github/workflows/pages.yml</code>，推送到 GitHub 后可以直接用 Actions 部署。</p>
@@ -100,9 +111,10 @@ draft: false
 <ol>
 <li>把这个项目推到 GitHub。</li><li>在仓库的 <code>Settings -&gt; Pages</code> 中启用 <code>GitHub Actions</code> 作为部署来源。</li><li>推送到 <code>main</code> 分支后，GitHub 会自动构建并发布 <code>dist/</code>。</li>
 </ol>
+<p>如果仓库还在使用 <code>main</code> 分支下的 <code>/docs</code> 作为 Pages 来源，本地可以执行 <code>python3 rookieblog.py build-docs</code> 来生成发布目录。</p>
 <h2 id="文章与页面">文章与页面</h2>
 <ul>
-<li>文章放在 <code>content/posts/*.md</code></li><li>独立页面放在 <code>content/pages/*.md</code></li><li>首页会自动按日期倒序展示文章</li><li>会自动生成 <code>dist/search/index.html</code> 和 <code>dist/search-index.json</code></li>
+<li>文章放在 <code>content/posts/**/*.md</code></li><li>独立页面放在 <code>content/pages/*.md</code></li><li><code>content/posts/</code> 下的子文件夹名会自动作为分类名</li><li>顶部导航里的“文章”会进入独立文章页</li><li>会自动生成分类页：<code>dist/categories/&lt;分类&gt;/index.html</code></li><li>文章阅读页侧栏会显示当前分类下的其他文章</li><li>首页默认只展示 <code>content/posts/others/</code> 或 <code>content/posts/other/</code> 下的文章</li><li>会自动生成 <code>dist/search/index.html</code> 和 <code>dist/search-index.json</code></li><li>文章主区域默认只显示 Markdown 正文本身，阅读页的大纲和同分类文章显示在侧栏</li>
 </ul>
 <h2 id="主题扩展">主题扩展</h2>
 <p>主题目录在 <code>themes/</code>。</p>
@@ -110,9 +122,12 @@ draft: false
 <pre><code class="language-text">themes/default/
 ├── assets/
 │   ├── theme.css
-│   └── search.js
+│   ├── search.js
+│   └── theme-toggle.js
 └── templates/
+    ├── articles.html
     ├── base.html
+    ├── category.html
     ├── home.html
     ├── page.html
     ├── post.html
@@ -142,10 +157,9 @@ draft: false
 <p>如果暂时不想启用评论，保留 <code>&quot;provider&quot;: &quot;&quot;</code> 即可。</p>
 <h2 id="适合这个框架的场景">适合这个框架的场景</h2>
 <ul>
-<li>想要一个比重量级 SSG 更简单的个人博客</li><li>更看重“容易安装和使用”，而不是海量插件生态</li>
+<li>想要一个比重量级 SSG 更简单的个人博客</li><li>更看重“容易安装和使用”</li><li>想用文件夹直接组织文章分类，而不是额外维护复杂配置</li>
 </ul>
       </div>
-      <ul class="tag-list"><li class="tag-chip">导入</li><li class="tag-chip">Markdown</li></ul>
     </article>
     
   </div>

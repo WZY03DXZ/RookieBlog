@@ -3,21 +3,26 @@ title: README 导入示例
 slug: readme-import-demo
 summary: RookieBlog 一个尽量轻量的静态博客框架： 只依赖 Python 标准库，不需要安装第三方包 文章直接写在 Markdown 里 支持从 txt、md、html、docx 导入文章，pdf 可通过本机 pdftotext 导入 自带前端全文搜索 主题从 themes/ 目录扩展 可选接入 Giscus / Utterances 评论 图片、SVG、…
 tags: [导入, Markdown]
+cover: ../../assets/page-images/主页展示.png
 date: 2026-04-21
 ---
-
 # RookieBlog
 
 一个尽量轻量的静态博客框架：
 
 - 只依赖 Python 标准库，不需要安装第三方包
 - 文章直接写在 Markdown 里
+- `content/posts/` 下的文件夹会自动作为文章分类
 - 支持从 `txt`、`md`、`html`、`docx` 导入文章，`pdf` 可通过本机 `pdftotext` 导入
 - 自带前端全文搜索
+- 自带暗色模式开关
+- 顶部提供独立的“文章”入口、分类页和文章阅读侧栏
 - 主题从 `themes/` 目录扩展
 - 可选接入 Giscus / Utterances 评论
 - 图片、SVG、附件可以直接放仓库，不需要第三方图床
 - 生成静态网页，适合部署到 GitHub Pages
+![alt text](../../assets/page-images/主页展示.png)
+![alt text](../../assets/page-images/主页展示2.png)
 
 ## 目录结构
 
@@ -26,10 +31,11 @@ RookieBlog/
 ├── content/
 │   ├── assets/         # 图片、SVG、附件
 │   ├── pages/          # 独立页面
-│   └── posts/          # 博客文章
+│   └── posts/          # 博客文章，子文件夹会作为分类
 ├── static/             # 公共静态资源，如 favicon、额外素材
 ├── themes/             # 主题模板和样式
 ├── .github/workflows/  # GitHub Pages 自动部署
+├── docs/               # 适用于 GitHub Pages /docs 来源的发布目录
 ├── rookieblog.py       # 生成器脚本
 └── site.json           # 站点配置
 ```
@@ -41,6 +47,14 @@ python3 rookieblog.py build
 ```
 
 生成结果会输出到 `dist/`。
+
+如果你当前的 GitHub Pages 仍然使用 `main` 分支下的 `/docs` 作为发布来源，可以再执行：
+
+```bash
+python3 rookieblog.py build-docs
+```
+
+这个命令会先生成 `dist/`，再同步到 `docs/`。
 
 如果你想本地预览：
 
@@ -56,10 +70,36 @@ python3 rookieblog.py new "我的第一篇文章"
 
 它会在 `content/posts/` 下生成一篇带 front matter 的 Markdown 文件。
 
+如果想直接放进分类文件夹：
+
+```bash
+python3 rookieblog.py new "NLP 的基础概念" --folder LLM
+```
+
+这样会生成到：
+
+```text
+content/posts/LLM/nlp-de-ji-chu-gai-nian.md
+```
+
 ## 导入常见文档
 
 ```bash
-python3 rookieblog.py import ./notes.docx --tags 导入,文档
+python3 rookieblog.py import ./notes.docx --folder others --tags 导入,Word
+
+or
+
+python3 rookieblog.py import ./notes.docx --folder others
+```
+
+导入 PDF 也是一样：
+
+```bash
+python3 rookieblog.py import ./paper.pdf --folder LLM --tags 导入,PDF
+
+or
+
+python3 rookieblog.py import ./paper.pdf --folder LLM
 ```
 
 支持：
@@ -112,6 +152,7 @@ draft: false
 - `content/assets/` 里的图片会被一起带到输出目录
 - 放在文章旁边的本地图片也能一起带过去
 - 不需要使用第三方图片托管服务
+- 推荐优先使用 `/assets/...` 这种站点内路径，这样文章以后移动到别的分类文件夹也不会丢图
 
 ## GitHub Pages 部署
 
@@ -123,12 +164,19 @@ draft: false
 2. 在仓库的 `Settings -> Pages` 中启用 `GitHub Actions` 作为部署来源。
 3. 推送到 `main` 分支后，GitHub 会自动构建并发布 `dist/`。
 
+如果仓库还在使用 `main` 分支下的 `/docs` 作为 Pages 来源，本地可以执行 `python3 rookieblog.py build-docs` 来生成发布目录。
+
 ## 文章与页面
 
-- 文章放在 `content/posts/*.md`
+- 文章放在 `content/posts/**/*.md`
 - 独立页面放在 `content/pages/*.md`
-- 首页会自动按日期倒序展示文章
+- `content/posts/` 下的子文件夹名会自动作为分类名
+- 顶部导航里的“文章”会进入独立文章页
+- 会自动生成分类页：`dist/categories/<分类>/index.html`
+- 文章阅读页侧栏会显示当前分类下的其他文章
+- 首页默认只展示 `content/posts/others/` 或 `content/posts/other/` 下的文章
 - 会自动生成 `dist/search/index.html` 和 `dist/search-index.json`
+- 文章主区域默认只显示 Markdown 正文本身，阅读页的大纲和同分类文章显示在侧栏
 
 ## 主题扩展
 
@@ -140,9 +188,12 @@ draft: false
 themes/default/
 ├── assets/
 │   ├── theme.css
-│   └── search.js
+│   ├── search.js
+│   └── theme-toggle.js
 └── templates/
+    ├── articles.html
     ├── base.html
+    ├── category.html
     ├── home.html
     ├── page.html
     ├── post.html
@@ -185,4 +236,5 @@ themes/default/
 ## 适合这个框架的场景
 
 - 想要一个比重量级 SSG 更简单的个人博客
-- 更看重“容易安装和使用”，而不是海量插件生态
+- 更看重“容易安装和使用”
+- 想用文件夹直接组织文章分类，而不是额外维护复杂配置

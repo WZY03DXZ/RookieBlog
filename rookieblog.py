@@ -27,6 +27,7 @@ STATIC_DIR = ROOT / "static"
 THEMES_DIR = ROOT / "themes"
 DIST_DIR = ROOT / "dist"
 THEME_DIST_DIR = DIST_DIR / "_theme"
+DOCS_DIR = ROOT / "docs"
 CONFIG_PATH = ROOT / "site.json"
 
 DEFAULT_THEME = "default"
@@ -1222,6 +1223,12 @@ def build_site() -> None:
     (DIST_DIR / ".nojekyll").write_text("", encoding="utf-8")
 
 
+def sync_docs_output() -> None:
+    if DOCS_DIR.exists():
+        shutil.rmtree(DOCS_DIR)
+    shutil.copytree(DIST_DIR, DOCS_DIR)
+
+
 def create_new_post(title: str, folder: str | None = None) -> Path:
     subdir = normalize_content_subdir(folder)
     target_dir = POSTS_DIR / subdir
@@ -1479,6 +1486,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("build", help="Generate the static site into dist/.")
+    subparsers.add_parser("build-docs", help="Build dist/ and sync the result into docs/.")
 
     new_parser = subparsers.add_parser("new", help="Create a new Markdown post.")
     new_parser.add_argument("title", help="Title of the new post.")
@@ -1506,6 +1514,12 @@ def main() -> None:
     if args.command == "build":
         build_site()
         print(f"Site generated in {DIST_DIR}")
+        return
+
+    if args.command == "build-docs":
+        build_site()
+        sync_docs_output()
+        print(f"Site generated in {DOCS_DIR}")
         return
 
     if args.command == "new":
