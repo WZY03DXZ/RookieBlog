@@ -1052,7 +1052,12 @@ def render_category_nav(categories: list[dict[str, Any]], page_dir: Path, curren
 
 def render_home_page(posts: list[ContentEntry], config: SiteConfig, pages: list[ContentEntry], categories: list[dict[str, Any]]) -> str:
     page_dir = DIST_DIR
-    cards_html = render_post_cards(posts, page_dir, config.theme)
+    home_posts = [
+        post
+        for post in posts
+        if entry_primary_category(post).strip().casefold() in {"others", "other"}
+    ]
+    cards_html = render_post_cards(home_posts, page_dir, config.theme)
     content_html = render_template(
         get_theme_template(config.theme, "home.html"),
         {
