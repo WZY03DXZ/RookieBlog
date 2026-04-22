@@ -966,12 +966,18 @@ def render_post_page(post: ContentEntry, config: SiteConfig, posts: list[Content
 def render_page_page(page: ContentEntry, config: SiteConfig, pages: list[ContentEntry]) -> str:
     page_dir = page.output_path.parent
     content_template = get_theme_template(config.theme, "page.html")
+    has_markdown_h1 = bool(re.match(r"\s*<h1\b", page.html_body))
+    page_header_html = ""
+    if not has_markdown_h1:
+        page_header_html = (
+            '<div class="eyebrow">独立页面</div>'
+            f"<h1>{html.escape(page.title)}</h1>"
+            f'<p class="article-lead">{html.escape(page.summary or config.description)}</p>'
+        )
     content_html = render_template(
         content_template,
         {
-            "entry_label": "独立页面",
-            "entry_title": html.escape(page.title),
-            "entry_summary": html.escape(page.summary or config.description),
+            "page_header_html": page_header_html,
             "body_html": page.html_body,
         },
     )
