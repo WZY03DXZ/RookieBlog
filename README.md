@@ -14,6 +14,8 @@
 - 图片、SVG、附件可以直接放仓库，不需要第三方图床
 - 生成静态网页，适合部署到 GitHub Pages
 
+在线体验页面：
+[https://wzy03dxz.github.io/RookieBlog/index.html](https://wzy03dxz.github.io/RookieBlog/index.html)
 
 ![RookieBlog 主页展示](content/assets/page-images/home-preview.png)
 ![RookieBlog 主页展示 2](content/assets/page-images/home-preview-2.png)
