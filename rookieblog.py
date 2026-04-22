@@ -944,14 +944,7 @@ def render_post_page(post: ContentEntry, config: SiteConfig, posts: list[Content
     content_html = render_template(
         content_template,
         {
-            "entry_label": "博客文章",
-            "entry_title": html.escape(post.title),
-            "entry_summary": html.escape(post.summary),
-            "entry_date": post.date.strftime("%Y-%m-%d") if post.date else "",
-            "author_name": html.escape(config.author),
-            "cover_html": render_cover(post, page_dir),
             "body_html": body_html,
-            "tags_html": render_tags(post.tags),
             "post_outline_html": render_post_outline(post, headings),
             "related_posts_html": render_related_posts(post, posts, page_dir),
             "comments_html": render_comments_block(config, post),
