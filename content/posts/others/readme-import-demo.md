@@ -3,7 +3,7 @@ title: README 导入示例
 slug: readme-import-demo
 summary: RookieBlog 一个尽量轻量的静态博客框架： 只依赖 Python 标准库，不需要安装第三方包 文章直接写在 Markdown 里 支持从 txt、md、html、docx 导入文章，pdf 可通过本机 pdftotext 导入 自带前端全文搜索 主题从 themes/ 目录扩展 可选接入 Giscus / Utterances 评论 图片、SVG、…
 tags: [导入, Markdown]
-cover: ../../assets/page-images/主页展示.png
+cover: ../../assets/page-images/home-preview.png
 date: 2026-04-21
 ---
 # RookieBlog
@@ -21,8 +21,8 @@ date: 2026-04-21
 - 可选接入 Giscus / Utterances 评论
 - 图片、SVG、附件可以直接放仓库，不需要第三方图床
 - 生成静态网页，适合部署到 GitHub Pages
-![alt text](../../assets/page-images/主页展示.png)
-![alt text](../../assets/page-images/主页展示2.png)
+![RookieBlog 主页展示](../../assets/page-images/home-preview.png)
+![RookieBlog 主页展示 2](../../assets/page-images/home-preview-2.png)
 
 ## 目录结构
 

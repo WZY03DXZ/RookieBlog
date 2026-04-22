@@ -15,8 +15,8 @@
 - 生成静态网页，适合部署到 GitHub Pages
 
 
-![alt text](../../assets/page-images/主页展示.png)
-![alt text](../../assets/page-images/主页展示2.png)
+![RookieBlog 主页展示](content/assets/page-images/home-preview.png)
+![RookieBlog 主页展示 2](content/assets/page-images/home-preview-2.png)
 
 
 ## 目录结构
